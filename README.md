@@ -1,7 +1,11 @@
-RFLED-Server
-==========
+RFLED-Server-V6
+===============
 
-Golang binary to emulate a LimitlessLED WiFi Bridge 4.0 unit.
+Golang binary to emulate a LimitlessLED WiFi Bridge 6.0 unit.
+
+Warning
+----
+**DOES NOT WORK YET**
 
 Install
 ----
