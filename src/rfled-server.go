@@ -68,10 +68,11 @@ func adm_server(conn *net.UDPConn, log bool, ip string, mac string, hostname str
                 if buf != nil {
                         applog(false, log, true, "ADM: message was " + string(buf[:msg]) + " from " + remoteAddr.String())
 
+                        var value string
                         if strings.Contains(string(buf[:msg]),"HF-A11ASSISTHREAD") {
-                                value := ip+","+mac+","+hostname
+                                value = ip+","+mac+","+hostname
                         } else {
-                                value := "+ok"
+                                value = "+ok"
                         }
                         _,err = conn.WriteToUDP([]byte(value),remoteAddr)
                         error_check(err,log)
