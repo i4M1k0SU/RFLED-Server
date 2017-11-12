@@ -6,6 +6,7 @@ import (
         "net"
         "os/exec"
         "os/user"
+        "os"
         "strconv"
         "strings"
         "sync"
@@ -58,7 +59,7 @@ func led_server(conn *net.UDPConn, log bool, s *serial.Port) {
 }
 
 // Function to check and work with admin config packets
-func adm_server(conn *net.UDPConn, log bool, ip string, mac string) {
+func adm_server(conn *net.UDPConn, log bool, ip string, mac string, hostname string) {
         buf := make([]byte, 64)
                 msg, remoteAddr, err := 0, new(net.UDPAddr), error(nil)
         for err == nil {
@@ -67,15 +68,14 @@ func adm_server(conn *net.UDPConn, log bool, ip string, mac string) {
                 if buf != nil {
                         applog(false, log, true, "ADM: message was " + string(buf[:msg]) + " from " + remoteAddr.String())
 
-                        if strings.Contains(string(buf[:msg]),"Link_Wi-Fi") {
-                                _,err = conn.WriteToUDP([]byte(ip+","+mac+","),remoteAddr)
-                                error_check(err,log)
-                                applog(false, log, true, "ADM: replied "+ip+","+mac+",")
+                        if strings.Contains(string(buf[:msg]),"HF-A11ASSISTHREAD") {
+                                value := ip+","+mac+","+hostname
                         } else {
-                                _,err = conn.WriteToUDP([]byte("+ok"),remoteAddr)
-                                error_check(err,log)
-                                applog(false, log, true, "ADM: replied +ok")
+                                value := "+ok"
                         }
+                        _,err = conn.WriteToUDP([]byte(value),remoteAddr)
+                        error_check(err,log)
+                        applog(false, log, true, "ADM: replied "+value)
                 }
         }
         error_check(err,log)
@@ -86,14 +86,14 @@ func main() {
 
         // Set our UART vars
         comport := flag.String("serial", "/dev/ttyAMA0", "Serial device to use")
-        comspeed := flag.Int("baud", 9600, "Serial baudrate")
+        comspeed := flag.Int("baud", 38400, "Serial baudrate")
         debug := flag.Bool("debug", false, "Enable verbose debugging")
 
         // Set our IP vars
         ip := flag.String("ip", "0.0.0.0", "IP address to listen on (LED Server)")
         interf := flag.String("int", "eth0", "Interface to listen on, used for mac address")
         adm_port := flag.Int("admport", 48899, "Port for the admin server")
-        led_port := flag.Int("ledport", 8899, "Port for the led server")
+        led_port := flag.Int("ledport", 5987, "Port for the led server")
         flag.Parse()
 
         // Check if we are root
@@ -146,7 +146,8 @@ func main() {
         }
 
         // Once we found our Interface we can then get the IP/Mac (unless we have one manually set)
-        mymac := strings.Replace(ethz.HardwareAddr.String(),":","",-1)
+        mymac := strings.ToUpper(strings.Replace(ethz.HardwareAddr.String(),":","",-1))
+        hostname, _ := os.Hostname()
         if *ip == "0.0.0.0" {
                 addrs, err := ethz.Addrs()
                 error_check(err,*debug)
@@ -160,7 +161,7 @@ func main() {
         if len(mymac) < 12 {
                 applog(true, *debug, false, "Error, unable to lookup mac address for interface!")
         }
-        applog(false, *debug, true,"Our Info: mac="+mymac+" ip="+*ip)
+        applog(false, *debug, true,"Our Info: mac="+mymac+" ip="+*ip+" hostname="+hostname)
 
         // load serial connection
         c := &serial.Config{Name: *comport, Baud: *comspeed}
@@ -186,7 +187,7 @@ func main() {
 
         // Function for Admin Server
         wg.Add(1)
-        go adm_server(adm_listen, *debug, *ip, mymac)
+        go adm_server(adm_listen, *debug, *ip, mymac, hostname)
 
         // Function for LED Server
         wg.Add(1)
