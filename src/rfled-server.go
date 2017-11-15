@@ -11,6 +11,10 @@ import (
         "strings"
         "sync"
         "github.com/tarm/serial"
+        "reflect"
+        "time"
+        "math/rand"
+        "encoding/binary"
 )
 
 // Logging function used by the application
@@ -41,8 +45,26 @@ func error_check(err error, log bool) {
         }
 }
 
+func createSessionId() []byte {
+        rand.Seed(time.Now().Unix())
+        bs := make([]byte, 2)
+        binary.LittleEndian.PutUint16(bs, uint16(rand.Intn(65535)))
+        return bs
+}
+
 // Function to check and work with LED control packets
 func led_server(conn *net.UDPConn, log bool, s *serial.Port) {
+        var createSessionRequestValue = []byte {
+                0x20, 0x00, 0x00, 0x00, 0x16, 0x02, 0x62, 0x3A,
+                0xD5, 0xED, 0xA3, 0x01, 0xAE, 0x08, 0x2D, 0x46,
+                0x61, 0x41, 0xA7, 0xF6, 0xDC, 0xAF, 0xD3, 0xE6,
+                0x00, 0x00,
+        }
+
+        var createSessionResponseValue []byte
+        var sessionId []byte
+        var count uint8 = 5
+
         buf := make([]byte, 64)
         msg, remoteAddr, err := 0, new(net.UDPAddr), error(nil)
         for err == nil {
@@ -50,8 +72,23 @@ func led_server(conn *net.UDPConn, log bool, s *serial.Port) {
                 error_check(err,log)
                 if buf != nil {
                       applog(false, log, true, "LED: message was " + string(buf[:msg]) + " from " + remoteAddr.String())
-                      // Write to serial
-                      _, err = s.Write(buf[:msg])
+                      // session create
+                      if reflect.DeepEqual(buf[:(msg - 1)], createSessionRequestValue) {
+                              macAddr := []byte {0xde, 0xad, 0xbe, 0xef, 0x01, 0x02, 0x03}
+                              count = 5
+                              sessionId = createSessionId()
+                              createSessionResponseValue = []byte { 0x28, 0x00, 0x00, 0x00, 0x11, 0x00, 0x02 }
+                              createSessionResponseValue = append(createSessionResponseValue, macAddr...)
+                              createSessionResponseValue = append(createSessionResponseValue, []byte {0x07, 0x85, 0x00, 0x00}...)
+                              createSessionResponseValue = append(createSessionResponseValue, sessionId...)
+                              createSessionResponseValue = append(createSessionResponseValue, []byte {0x00, 0x00}...)
+                              _, err = conn.WriteToUDP(createSessionResponseValue, remoteAddr)
+                      } else {
+                              // Write to serial
+                              _, err = s.Write(buf[10:msg])
+                              _, err = conn.WriteToUDP([]byte{ 0x88, 0x00, 0x00, 0x00, 0x03, 0x00, count, 0x00 },remoteAddr)
+                              count++
+                      }
                       error_check(err,log)
                 }
         }
