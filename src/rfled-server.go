@@ -46,7 +46,7 @@ func error_check(err error, log bool) {
         }
 }
 
-func createSessionId() []byte {
+func generateSessionId() []byte {
         rand.Seed(time.Now().Unix())
         bs := make([]byte, 2)
         binary.LittleEndian.PutUint16(bs, uint16(rand.Intn(65535)))
@@ -62,12 +62,12 @@ func led_server(conn *net.UDPConn, log bool, s *serial.Port, macHex []byte) {
                 0x00, 0x00,
         }
 
-        var createSessionResponseValue []byte
         var sessionId []byte
         var count uint8 = 5
-
+        uuid := make([]byte, 32)
         buf := make([]byte, 64)
         msg, remoteAddr, err := 0, new(net.UDPAddr), error(nil)
+
         for err == nil {
                 msg, remoteAddr, err = conn.ReadFromUDP(buf)
                 error_check(err,log)
@@ -76,17 +76,65 @@ func led_server(conn *net.UDPConn, log bool, s *serial.Port, macHex []byte) {
                       // session create
                       if reflect.DeepEqual(buf[:(msg - 1)], createSessionRequestValue) {
                               count = 5
-                              sessionId = createSessionId()
-                              createSessionResponseValue = []byte {0x28, 0x00, 0x00, 0x00, 0x11, 0x00, 0x02}
-                              createSessionResponseValue = append(createSessionResponseValue, macHex...)
-                              createSessionResponseValue = append(createSessionResponseValue, []byte {0x54, 0x07, 0x85, 0x00, 0x00}...)
-                              createSessionResponseValue = append(createSessionResponseValue, sessionId...)
-                              createSessionResponseValue = append(createSessionResponseValue, []byte {0x00, 0x00}...)
-                              _, err = conn.WriteToUDP(createSessionResponseValue, remoteAddr)
-                      } else {
+                              sessionId = generateSessionId()
+                              response := []byte {0x28, 0x00, 0x00, 0x00, 0x11, 0x00, 0x02}
+                              response = append(response, macHex...)
+                              response = append(response, []byte {0x54, 0x07, 0x85, 0x00, 0x00}...)
+                              response = append(response, sessionId...)
+                              response = append(response, []byte {0x00, 0x00}...)
+                              _, err = conn.WriteToUDP(response, remoteAddr)
+
+                      // app
+                      } else if reflect.DeepEqual(buf[:4], []byte {0x10, 0x00, 0x00, 0x00}) {
+                              // app key generate
+                              if reflect.DeepEqual(buf[:6], []byte {0x10, 0x00, 0x00, 0x00, 0x24, 0x02}) {
+                                      applog(false, log, true, "App key generate")
+                                      copy(uuid, buf[9:41])
+                              }
+                              // keepalive
+                              if reflect.DeepEqual(buf[:6], []byte {0x10, 0x00, 0x00, 0x00, 0x0a, 0x02}) {
+                                      applog(false, log, true, "keepalive")
+                                      if !reflect.DeepEqual(buf[9:15], macHex) {
+                                              applog(false, log, true, "MAC address Mismatched")
+                                              continue
+                                      }
+                                      applog(false, log, true, "MAC address Matched")
+                              }
+                              response := []byte {0x18, 0x00, 0x00, 0x00, 0x40, 0x02}
+                              response = append(response, macHex...)
+                              response = append(response, []byte {0x00, 0x20}...)
+                              response = append(response, uuid...)
+                              response = append(response, []byte {0x01, 0x00, 0x01, 0x17, 0x63, 0x00, 0x00, 0x05, 0x00, 0x09}...)
+                              response = append(response, []byte("xlink_dev")...)
+                              response = append(response, []byte {0x07, 0x5b, 0xcd, 0x15}...)
+                              _, err = conn.WriteToUDP(response, remoteAddr)
+
+                      // app
+                      } else if reflect.DeepEqual(buf[:4], []byte {0xd0, 0x00, 0x00, 0x00}) {
+                              response := []byte {0xd8, 0x00, 0x00, 0x00, 0x07}
+                              response = append(response, macHex...)
+                              response = append(response, []byte {0x00}...)
+                              _, err = conn.WriteToUDP(response, remoteAddr)
+
+                      // app
+                      } else if reflect.DeepEqual(buf[:4], []byte {0x20, 0x00, 0x00, 0x00}) {
+                              response := []byte {0x28, 0x00, 0x00, 0x00, 0x11, 0x00, 0x02}
+                              response = append(response, macHex...)
+                              response = append(response, []byte {0x54, 0x07, 0x85, 0x00, 0x00, 0x01, 0x75, 0x01, 0x00}...)
+                              _, err = conn.WriteToUDP(response, remoteAddr)
+
+                      // light command
+                      } else if reflect.DeepEqual(buf[:4], []byte {0x80, 0x00, 0x00, 0x00}) {
                               // Write to serial
                               _, err = s.Write(buf[10:msg])
-                              _, err = conn.WriteToUDP([]byte{ 0x88, 0x00, 0x00, 0x00, 0x03, 0x00, count, 0x00 },remoteAddr)
+                              _, err = conn.WriteToUDP([]byte {0x88, 0x00, 0x00, 0x00, 0x03, 0x00, count, 0x00}, remoteAddr)
+                              // serial check
+                              if reflect.DeepEqual(buf[10:msg], []byte {0x33, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x33}) {
+                                      response := []byte {0x80, 0x00, 0x00, 0x00, 0x15}
+                                      response = append(response, macHex...)
+                                      response = append(response, []byte {0x05, 0x02, 0x00, 0x34, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x34}...)
+                                      _, err = conn.WriteToUDP(response, remoteAddr)
+                              }
                               count++
                       }
                       error_check(err,log)
@@ -131,7 +179,7 @@ func parseMacAddress(str string) (string, []byte) {
         macStr := strings.ToUpper(strings.Replace(str,":","",-1))
         macHex, err := hex.DecodeString(macStr)
         if err != nil {
-                macHex = []byte{ 0xf0, 0xfe, 0x6b, 0x00, 0x00, 0x00 }
+                macHex = []byte {0xf0, 0xfe, 0x6b, 0x00, 0x00, 0x00}
                 macStr = "F0FE6B000000"
         }
         return macStr, macHex
@@ -232,7 +280,7 @@ func main() {
         defer adm_listen.Close()
 
         // Start LED server
-        led_addr, err := net.ResolveUDPAddr("udp", *ip+":"+strconv.Itoa(*led_port))
+        led_addr, err := net.ResolveUDPAddr("udp", ":"+strconv.Itoa(*led_port))
         error_check(err,*debug)
         led_listen, err := net.ListenUDP("udp", led_addr)
         error_check(err,*debug)

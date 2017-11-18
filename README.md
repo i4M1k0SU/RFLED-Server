@@ -3,11 +3,6 @@ RFLED-Server-V6
 
 Golang binary to emulate a LimitlessLED WiFi Bridge 6.0 unit.
 
-Warning
-----
-~**DOES NOT WORK YET**~  
-**Not support iOS App yet**
-
 Install
 ----
   1. Download the latest release from the [Releases](https://github.com/riptidewave93/RFLED-Server/releases)
