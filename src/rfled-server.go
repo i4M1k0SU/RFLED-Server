@@ -154,12 +154,43 @@ func adm_server(conn *net.UDPConn, log bool, ip string, mac string, hostname str
                         applog(false, log, true, "ADM: message was " + string(buf[:msg]) + " from " + remoteAddr.String())
 
                         var value string
-                        if strings.Contains(string(buf[:msg]),"HF-A11ASSISTHREAD") {
-                                value = ip+","+mac+","+hostname
+
+                        // command
+                        if strings.Contains(string(buf[:3]),"AT+") {
+                                if strings.Contains(string(buf[:msg]),"AT+WSSSID\r") ||
+                                    strings.Contains(string(buf[:msg]),"AT+WAP\r") ||
+                                    strings.Contains(string(buf[:msg]),"AT+WMODE\r") ||
+                                    strings.Contains(string(buf[:msg]),"AT+WSLQ\r") ||
+                                    strings.Contains(string(buf[:msg]),"AT+WSLK\r") ||
+                                    strings.Contains(string(buf[:msg]),"AT+WSCAN\r") {
+                                        value = "+ok=Ethernet"
+                                } else if strings.Contains(string(buf[:msg]),"AT+NETP\r") {
+                                        value = "+ok=UDP,Server,5987,"+ip
+                                } else if strings.Contains(string(buf[:msg]),"AT+WANN\r") {
+                                        value = "+ok="+ip
+                                } else if strings.Contains(string(buf[:msg]),"AT+TCPTO\r") ||
+                                    strings.Contains(string(buf[:msg]),"AT+WEBU\r") ||
+                                    strings.Contains(string(buf[:msg]),"AT+SOCKB\r") {
+                                        value = "+ok=NONE"
+                                } else if strings.Contains(string(buf[:msg]),"AT+WSMAC\r") {
+                                        value = "+ok="+mac
+                                } else if strings.Contains(string(buf[:msg]),"AT+Q\r") {
+                                        continue
+                                } else {
+                                        value = "+ok"
+                                }
+                                value += "\r\n\r\n"
                         } else {
-                                value = "+ok"
+                                if strings.Contains(string(buf[:msg]),"HF-A11ASSISTHREAD") {
+                                        value = ip+","+mac+","+hostname
+                                } else if strings.Contains(string(buf[:msg]),"+ok") {
+                                        continue
+                                } else {
+                                        value = "+ok"
+                                }
                         }
-                        _,err = conn.WriteToUDP([]byte(value),remoteAddr)
+
+                        _,err = conn.WriteToUDP([]byte(value), remoteAddr)
                         error_check(err,log)
                         applog(false, log, true, "ADM: replied "+value)
                 }
