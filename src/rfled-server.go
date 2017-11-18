@@ -223,6 +223,7 @@ func main() {
         comport := flag.String("serial", "/dev/ttyAMA0", "Serial device to use")
         comspeed := flag.Int("baud", 38400, "Serial baudrate")
         debug := flag.Bool("debug", false, "Enable verbose debugging")
+        isEnabledRootCheck := flag.Bool("root_check", true, "Enable root user check")
 
         // Set our IP vars
         ip := flag.String("ip", "0.0.0.0", "IP address to listen on (LED Server)")
@@ -233,17 +234,19 @@ func main() {
 
         // Check if we are root
         usr,err := user.Current()
-        if err != nil {
-                applog(false, *debug, true, "Error with user.Current(), failing back...")
-                // If we are here, we are prob on arm which does NOT support user.Current()
-                usr, err := exec.Command("whoami").Output()
-                error_check(err,*debug)
-                if string(usr) != "root\n" {
-                        applog(false, *debug, true, "Current user us "+string(usr))
+        if *isEnabledRootCheck {
+                if err != nil {
+                        applog(false, *debug, true, "Error with user.Current(), failing back...")
+                        // If we are here, we are prob on arm which does NOT support user.Current()
+                        usr, err := exec.Command("whoami").Output()
+                        error_check(err,*debug)
+                        if string(usr) != "root\n" {
+                                applog(false, *debug, true, "Current user us "+string(usr))
+                                applog(true, *debug, false, "Not running as root, exiting!")
+                        }
+                } else if usr.Uid != "0" {
                         applog(true, *debug, false, "Not running as root, exiting!")
                 }
-        } else if usr.Uid != "0" {
-                applog(true, *debug, false, "Not running as root, exiting!")
         }
 
         // Load our interface information based on user input, used for admin server
