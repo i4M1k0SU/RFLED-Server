@@ -15,6 +15,7 @@ import (
         "time"
         "math/rand"
         "encoding/binary"
+        "encoding/hex"
 )
 
 // Logging function used by the application
@@ -53,7 +54,7 @@ func createSessionId() []byte {
 }
 
 // Function to check and work with LED control packets
-func led_server(conn *net.UDPConn, log bool, s *serial.Port) {
+func led_server(conn *net.UDPConn, log bool, s *serial.Port, macHex []byte) {
         var createSessionRequestValue = []byte {
                 0x20, 0x00, 0x00, 0x00, 0x16, 0x02, 0x62, 0x3A,
                 0xD5, 0xED, 0xA3, 0x01, 0xAE, 0x08, 0x2D, 0x46,
@@ -74,12 +75,11 @@ func led_server(conn *net.UDPConn, log bool, s *serial.Port) {
                       applog(false, log, true, "LED: message was " + string(buf[:msg]) + " from " + remoteAddr.String())
                       // session create
                       if reflect.DeepEqual(buf[:(msg - 1)], createSessionRequestValue) {
-                              macAddr := []byte {0xde, 0xad, 0xbe, 0xef, 0x01, 0x02, 0x03}
                               count = 5
                               sessionId = createSessionId()
-                              createSessionResponseValue = []byte { 0x28, 0x00, 0x00, 0x00, 0x11, 0x00, 0x02 }
-                              createSessionResponseValue = append(createSessionResponseValue, macAddr...)
-                              createSessionResponseValue = append(createSessionResponseValue, []byte {0x07, 0x85, 0x00, 0x00}...)
+                              createSessionResponseValue = []byte {0x28, 0x00, 0x00, 0x00, 0x11, 0x00, 0x02}
+                              createSessionResponseValue = append(createSessionResponseValue, macHex...)
+                              createSessionResponseValue = append(createSessionResponseValue, []byte {0x54, 0x07, 0x85, 0x00, 0x00}...)
                               createSessionResponseValue = append(createSessionResponseValue, sessionId...)
                               createSessionResponseValue = append(createSessionResponseValue, []byte {0x00, 0x00}...)
                               _, err = conn.WriteToUDP(createSessionResponseValue, remoteAddr)
@@ -117,6 +117,24 @@ func adm_server(conn *net.UDPConn, log bool, ip string, mac string, hostname str
                 }
         }
         error_check(err,log)
+}
+
+func getHostName() string {
+        hostname, err := os.Hostname()
+        if err != nil {
+                hostname = "HF-LPB100"
+        }
+        return hostname
+}
+
+func parseMacAddress(str string) (string, []byte) {
+        macStr := strings.ToUpper(strings.Replace(str,":","",-1))
+        macHex, err := hex.DecodeString(macStr)
+        if err != nil {
+                macHex = []byte{ 0xf0, 0xfe, 0x6b, 0x00, 0x00, 0x00 }
+                macStr = "F0FE6B000000"
+        }
+        return macStr, macHex
 }
 
 func main() {
@@ -184,8 +202,8 @@ func main() {
         }
 
         // Once we found our Interface we can then get the IP/Mac (unless we have one manually set)
-        mymac := strings.ToUpper(strings.Replace(ethz.HardwareAddr.String(),":","",-1))
-        hostname, _ := os.Hostname()
+        mymac, mymacHex := parseMacAddress(ethz.HardwareAddr.String())
+        hostname := getHostName()
         if *ip == "0.0.0.0" {
                 addrs, err := ethz.Addrs()
                 error_check(err,*debug)
@@ -229,7 +247,7 @@ func main() {
 
         // Function for LED Server
         wg.Add(1)
-        go led_server(led_listen, *debug, s)
+        go led_server(led_listen, *debug, s, mymacHex)
 
         wg.Wait()
 }
