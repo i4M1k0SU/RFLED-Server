@@ -32,6 +32,8 @@ else
   env GOOS=linux GOARCH=arm GOARM=6 go build -ldflags="$GOFLAGS" -o $GOBIN/rfled-server-armv6 $PWD/src/rfled-server.go
   echo "Building armv7..."
   env GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="$GOFLAGS" -o $GOBIN/rfled-server-armv7 $PWD/src/rfled-server.go
+  echo "Building arm64..."
+  env GOOS=linux GOARCH=arm64 go build -ldflags="$GOFLAGS" -o $GOBIN/rfled-server-arm64 $PWD/src/rfled-server.go
 
   # We finished!
   if [ $? -eq 0 ]; then
@@ -45,7 +47,7 @@ else
       exit 1
     fi
     echo "Building Releases..."
-    for arch in amd64 armv6 armv7;
+    for arch in amd64 armv6 armv7 arm64;
     do
       echo "Packaging $arch"
       if [ ! -d "$GOPATH/releases/tmp/$arch/rfled-server/usr/sbin" ]; then
