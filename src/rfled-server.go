@@ -46,13 +46,6 @@ func error_check(err error, log bool) {
         }
 }
 
-func generateSessionId() []byte {
-        rand.Seed(time.Now().Unix())
-        bs := make([]byte, 2)
-        binary.LittleEndian.PutUint16(bs, uint16(rand.Intn(65535)))
-        return bs
-}
-
 // Function to check and work with LED control packets
 func led_server(conn *net.UDPConn, log bool, s *serial.Port, macHex []byte) {
         var createSessionRequestValue = []byte {
@@ -196,6 +189,13 @@ func adm_server(conn *net.UDPConn, log bool, ip string, mac string, hostname str
                 }
         }
         error_check(err,log)
+}
+
+func generateSessionId() []byte {
+        rand.Seed(time.Now().Unix())
+        bs := make([]byte, 2)
+        binary.LittleEndian.PutUint16(bs, uint16(rand.Intn(65535)))
+        return bs
 }
 
 func getHostName() string {
